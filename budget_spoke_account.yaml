@@ -1,0 +1,227 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Spoke Account Resources for BlogBudgets Solution
+
+Parameters:
+  ManagementAccountId:
+    Type: String
+    Description: "The AWS Account ID of the management account (Control Tower Management Account)."
+    AllowedPattern: "^[0-9]{12}$"  
+
+  EmailRecipient:
+    Type: String
+    Description: "Email to receive AWS Budget alerts."
+
+  BlogBudgetsSSMParameterName:
+    Type: String
+    Default: "/BlogBudgets/CostThreshold"
+    Description: "SSM Parameter naming storing the budget value."
+
+  BlogBudgetsName:
+    Type: String
+    Default: "SpokeAccountBudget"
+    Description: "Name of the AWS Budget to be created and updated."
+
+  BlogBudgetsThreshold:
+    Type: String
+    Default: "1000"
+    Description: "Default budget threshold value."
+
+  BlogBudgetsSpokeRoleName:
+    Type: String
+    Default: BlogBudgetsSpokeRole
+    Description: "Name for the Spoke Account IAM Role"
+
+  BlogBudgetsAutomationRoleName:
+    Type: String
+    Default: BlogBudgetsAutomationRole
+    Description: "Name for the Automation Role in the Spoke Account"
+
+Resources:
+  BlogBudgetsSpokeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: "Budgets Spoke Account IAM Lambda Assumed Role"
+      RoleName: !Ref BlogBudgetsSpokeRoleName
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${ManagementAccountId}:role/BlogBudgetsLambdaRole"
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: BlogBudgetsSpokePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:PutParameter
+                  - ssm:GetParameter
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${BlogBudgetsSSMParameterName}"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Static name used for IAM role for references."
+
+  BlogBudgetsAutomationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: "SSM Automation Execution IAM Role"
+      RoleName: !Ref BlogBudgetsAutomationRoleName
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "events.amazonaws.com"
+                - "ssm.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Sub ${AWS::AccountId}
+      Policies:
+        - PolicyName: BlogBudgetsAutomationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:GetParameter"
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/BlogBudgets/*"
+              - Effect: Allow
+                Action:
+                  - "budgets:ModifyBudget"
+                Resource: !Sub "arn:${AWS::Partition}:budgets::${AWS::AccountId}:budget/${BlogBudgetsName}"
+              - Effect: Allow
+                Action:
+                  - "ssm:StartAutomationExecution"
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:automation-definition/BlogBudgetsAutomationDoc:*"
+
+              - Effect: Allow
+                Action:
+                  - "iam:PassRole"
+                Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${BlogBudgetsAutomationRoleName}"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Static name used for IAM role for references."
+
+  BlogBudgetsSSMParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Ref BlogBudgetsSSMParameterName
+      Type: String
+      AllowedPattern: "^[0-9]+$"
+      Value: !Ref BlogBudgetsThreshold
+      Description: "Stores the budget threshold value for this Spoke Account"
+
+  BlogBudgetsAWSBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Ref BlogBudgetsName
+        BudgetLimit:
+          Amount: !Ref BlogBudgetsThreshold
+          Unit: USD
+        TimeUnit: MONTHLY
+        BudgetType: COST
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 90
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref EmailRecipient
+
+  BlogBudgetsSSMDocument:
+    Type: AWS::SSM::Document
+    Properties:
+      Name: BlogBudgetsAutomationDoc
+      DocumentType: Automation
+      Content:
+        schemaVersion: '0.3'
+        description: "SSM Automation Document to update AWS Budgets using SSM Parameter values"
+        assumeRole: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${BlogBudgetsAutomationRoleName}"
+        parameters:
+          AutomationAssumeRole:
+            type: String
+            description: "IAM role ARN that the automation should assume"
+            default: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${BlogBudgetsAutomationRoleName}"
+          SSMParameter:
+            type: String
+            description: "SSM Parameter storing the budget value"
+            default: !Ref BlogBudgetsSSMParameterName
+        mainSteps:
+          - name: getBudgetValue
+            action: aws:executeAwsApi
+            nextStep: updateBudget
+            inputs:
+              Service: ssm
+              Api: GetParameter
+              Name: "{{ SSMParameter }}"
+            outputs:
+              - Name: BudgetValue
+                Selector: $.Parameter.Value
+                Type: String
+          - name: updateBudget
+            action: aws:executeAwsApi
+            inputs:
+              Service: budgets
+              Api: UpdateBudget
+              AccountId: !Sub "${AWS::AccountId}"
+              NewBudget:
+                BudgetName: !Ref BlogBudgetsName
+                BudgetLimit:
+                  Amount: "{{ getBudgetValue.BudgetValue }}"
+                  Unit: USD
+                TimeUnit: MONTHLY
+                BudgetType: COST
+
+  BlogBudgetsEventLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: "/aws/events/BlogBudgetsEventLogs"
+      RetentionInDays: 30
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: "CloudWatch Logs protects data at rest using encryption. All log groups are encrypted. By default, the CloudWatch Logs service manages the server-side encryption and uses server-side encryption with 256-bit Advanced Encryption Standard Galois/Counter Mode (AES-GCM) to encrypt log data at rest."
+
+
+  BlogBudgetsEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: "BlogBudgetsSSMTrigger"
+      EventPattern:
+        source:
+          - "aws.ssm"
+        detail-type:
+          - "Parameter Store Change"
+        detail:
+          name:
+            - !Ref BlogBudgetsSSMParameterName
+          operation:
+            - "Update"
+      Targets:
+        - Arn: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:automation-definition/${BlogBudgetsSSMDocument}"
+          Id: "SSMTarget"
+          RoleArn: !GetAtt BlogBudgetsAutomationRole.Arn
+        - Arn: !GetAtt BlogBudgetsEventLogGroup.Arn
+          Id: "CloudWatchLogsTarget"
+
+Outputs:
+  BlogBudgetsSpokeRole:
+    Value: !Ref BlogBudgetsSpokeRole
+  BlogBudgetsAutomationRole:
+    Value: !Ref BlogBudgetsAutomationRole
+  BlogBudgetsSSMDocument:
+    Value: !Ref BlogBudgetsSSMDocument
