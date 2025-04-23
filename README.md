@@ -32,8 +32,10 @@ The solution consists of the following key components:
 - `EmailRecipient`: Email address for budget notifications
 - `BlogBudgetsThreshold`: Default budget threshold value
 
-## Considerations before implementing the solution
-considerations
+## Implementation and Operation Instructions
+1. Deploy the management account resources with the required parameters.
+2. Deploy the spoke account resources with the required parameters.
+3. Locate the DynamoDB table in the management account and add an entry for the spoke account ID and budget.
 
 ## Error Handling
 
