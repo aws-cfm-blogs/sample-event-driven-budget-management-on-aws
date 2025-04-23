@@ -50,8 +50,7 @@ The solution consists of the following key components:
 4. Upload the template file and click "Next"
 5. Enter stack details:
    - Stack name: e.g., "budget-management"
-   - SSMBudgetParameter: "/BlogBudgets/CostThreshold" (or your preferred path)
-   - SpokeRoleName: "BlogBudgetsSpokeRole" (note this for spoke account setup)
+   - Stack parameters
 6. Click "Next", review the configuration, and create the stack
 7. Wait for stack creation to complete (approximately 5 minutes)
 
@@ -62,9 +61,7 @@ The solution consists of the following key components:
 4. Upload the template file and click "Next"
 5. Enter stack details:
    - Stack name: e.g., "budget-spoke"
-   - ManagementAccountId: Your management account ID (12-digit number)
-   - EmailRecipient: Email address for budget notifications
-   - BlogBudgetsThreshold: Initial budget amount (e.g., "1000")
+   - Stack parameters
 6. Click "Next", review the configuration, and create the stack
 7. Wait for stack creation to complete (approximately 5 minutes)
 
@@ -75,6 +72,9 @@ The solution consists of the following key components:
 2. In the spoke account:
    - Check that the SSM parameter exists with the specified budget value
    - Verify the AWS Budget is created with the correct threshold
+3. In the management account:
+    - Create an entry in the DynamoDB table for a spoke AWS Account ID and budget amount
+    - Verify budget is updated
 
 ## Error Handling
 
