@@ -11,23 +11,28 @@ Our solution implements an event-driven architecture that automates budget manag
 ## Components of the Solution
 
 ### Management Account Resources
-- **Amazon DynamoDB Table**: Stores the budget information for each linked account
-- **AWS Lambda Function**: Triggered by updates to the DynamoDB table and updates budgets in spoke accounts using AWS Systems Manager
-- **IAM Roles**: Provides necessary permissions for cross-account access
+- **Amazon DynamoDB Table (BlogBudgetsDynamoDB)**: Stores the budget information for each linked account
+- **AWS Lambda Function (BlogBudgetsUpdateLambda)**: Triggered by updates to the DynamoDB table and updates budgets in spoke accounts using AWS Systems Manager
+- **IAM Roles**:
+  - **BlogBudgetsLambdaRole**: Provides necessary permissions for Lambda to access DynamoDB and assume cross-account roles
 
 ### Spoke Account Resources
-- **AWS SSM Parameter Store**: Holds the updated budget value
-- **Amazon EventBridge Rules**: Trigger automation when the SSM parameter is updated
-- **AWS Budgets**: Manages the account's cost based on these parameters
+- **AWS SSM Parameter Store (/BlogBudgets/CostThreshold)**: Holds the updated budget value
+- **Amazon EventBridge Rule (BlogBudgetsSSMTrigger)**: Triggers automation when the SSM parameter is updated
+- **AWS SSM Automation Document (BlogBudgetsAutomationDoc)**: Executes the budget update process
+- **AWS Budgets (SpokeAccountBudget)**: Manages the account's cost based on these parameters
+- **IAM Roles**:
+  - **BlogBudgetsSpokeRole**: Allows the management account Lambda to update SSM parameters
+  - **BlogBudgetsAutomationRole**: Allows EventBridge and SSM to execute automation
 - **Email Notifications**: Sends alerts if budget thresholds are exceeded
 
 ## Workflow
 
-1. **Update DynamoDB Table**: The user updates the budget value for a linked account in the DynamoDB table located in the management account
-2. **DynamoDB Stream Trigger**: This update triggers a DynamoDB stream, which in turn triggers the Lambda function
-3. **Lambda Updates SSM Parameter**: The Lambda function reads the updated budget value, assumes a cross-account role, and updates the SSM Parameter Store in the spoke account
-4. **EventBridge Rule Trigger**: When the SSM Parameter Store is updated, an EventBridge Rule triggers the SSM Automation document
-5. **AWS Budgets Update**: The SSM Automation document reads the updated budget value and updates AWS Budgets accordingly
+1. **Update DynamoDB Table**: The user updates the budget value for a linked account in the BlogBudgetsDynamoDB table located in the management account
+2. **DynamoDB Stream Trigger**: This update triggers a DynamoDB stream, which in turn triggers the BlogBudgetsUpdateLambda function
+3. **Lambda Updates SSM Parameter**: The Lambda function reads the updated budget value, assumes the BlogBudgetsSpokeRole cross-account role, and updates the /BlogBudgets/CostThreshold SSM Parameter Store in the spoke account
+4. **EventBridge Rule Trigger**: When the SSM Parameter Store is updated, the BlogBudgetsSSMTrigger EventBridge Rule triggers the BlogBudgetsAutomationDoc SSM Automation document
+5. **AWS Budgets Update**: The SSM Automation document reads the updated budget value and updates the SpokeAccountBudget AWS Budget accordingly
 6. **Email Notifications**: When spending reaches configured thresholds, the system sends notifications to designated stakeholders
 
 ## Prerequisites
@@ -60,12 +65,12 @@ Our solution implements an event-driven architecture that automates budget manag
 
 ### 1. Deploy the Management Account Stack
 
-In the management account, deploy the `budget_master_account.yaml` CloudFormation Stack:
+In the management account, deploy the `budget_mgmt_account.yaml` CloudFormation Stack:
 
 - This template will deploy:
-  - An Amazon DynamoDB table that stores budget values for each spoke account
-  - An AWS Lambda function triggered by the DynamoDB stream
-  - IAM roles with necessary permissions for cross-account access
+  - An Amazon DynamoDB table (BlogBudgetsDynamoDB) that stores budget values for each spoke account
+  - An AWS Lambda function (BlogBudgetsUpdateLambda) triggered by the DynamoDB stream
+  - IAM roles (BlogBudgetsLambdaRole) with necessary permissions for cross-account access
 
 ### 2. Deploy Spoke Account Stack
 
@@ -97,7 +102,7 @@ When you update the budget value for an account, the budget limit in AWS Budgets
 
 ## CloudFormation Template Parameters
 
-### Management Account Template (`budget_master_account.yaml`)
+### Management Account Template (`budget_mgmt_account.yaml`)
 - `SSMBudgetParameter`: SSM parameter path for budget values (Default: "/BlogBudgets/CostThreshold")
 - `SpokeRoleName`: Name of the role to assume in spoke accounts (Default: "BlogBudgetsSpokeRole")
 
@@ -105,9 +110,10 @@ When you update the budget value for an account, the budget limit in AWS Budgets
 - `ManagementAccountId`: AWS Account ID of the management account
 - `EmailRecipient`: Email address for budget notifications
 - `BlogBudgetsSSMParameterName`: SSM Parameter name storing the budget value (Default: "/BlogBudgets/CostThreshold")
-- `BlogBudgetsName`: Name of the AWS Budget
-- `BlogBudgetsSpokeRoleName`: Name for the Spoke Account IAM role (should match the SpokeRoleName in Management Account Template)
-- `BlogBudgetsAutomationRoleName`: Name for the automation role in the spoke account
+- `BlogBudgetsName`: Name of the AWS Budget (Default: "SpokeAccountBudget")
+- `BlogBudgetsThreshold`: Default budget threshold value (Default: "1000")
+- `BlogBudgetsSpokeRoleName`: Name for the Spoke Account IAM role (Default: "BlogBudgetsSpokeRole")
+- `BlogBudgetsAutomationRoleName`: Name for the automation role in the spoke account (Default: "BlogBudgetsAutomationRole")
 
 ## Cleaning Up
 
