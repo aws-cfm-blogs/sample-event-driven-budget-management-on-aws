@@ -2,7 +2,7 @@
 
 This solution provides an automated and scalable approach to manage AWS budgets across multiple accounts in your organization. By leveraging AWS services like DynamoDB, Lambda, SSM Parameter Store, and AWS Budgets, you can centrally manage budgets with automated notifications when accounts approach or exceed their allocated thresholds.
 
-![Solution Architecture](solutions_overview.png "Solution Architecture")
+![Solution Architecture](Solution Architecture.png "Solution Architecture")
 
 ## Solution Overview
 
