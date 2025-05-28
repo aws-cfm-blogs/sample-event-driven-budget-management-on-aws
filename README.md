@@ -4,6 +4,8 @@ This solution provides an automated and scalable approach to manage AWS budgets 
 
 ![Solution Architecture](solution_architecture.png "Solution Architecture")
 
+The architecture diagram above illustrates the workflow of the solution, showing how budget updates flow from the Management Account through to the Spoke Account, with all the key resources labeled with their specific names.
+
 ## Solution Overview
 
 Our solution implements an event-driven architecture that automates budget management across your AWS organization. The process starts in the management account, where account-specific budgets are defined and stored in an Amazon DynamoDB table. AWS Lambda functions automatically propagate these budget configurations to individual accounts through their respective AWS Systems Manager Parameter Stores. AWS Budgets monitors spending in real-time, triggering email notifications when accounts approach or exceed their allocated thresholds.
