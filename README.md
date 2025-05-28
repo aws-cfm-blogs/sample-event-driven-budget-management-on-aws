@@ -32,7 +32,7 @@ Our solution implements an event-driven architecture that automates budget manag
 2. **Amazon DynamoDB Stream Trigger**: This update triggers an Amazon DynamoDB stream, which in turn triggers the BlogBudgetsUpdateLambda function
 3. **AWS Lambda Updates AWS Systems Manager Parameter**: The AWS Lambda function reads the updated budget value, assumes the BlogBudgetsSpokeRole cross-account role, and updates the /BlogBudgets/CostThreshold AWS Systems Manager Parameter Store in the spoke account
 4. **Amazon EventBridge Rule Trigger**: When the AWS Systems Manager Parameter Store is updated, the BlogBudgetsSSMTrigger Amazon EventBridge Rule triggers the BlogBudgetsAutomationDoc AWS Systems Manager Automation document
-5. **AWS Budgets Update**: The AWS Systems Manager Automation document reads the updated budget value and updates the SpokeAccountBudget AWS Budget accordingly
+5. **AWS Budgets Update**: The AWS Systems Manager Automation document in the spoke account reads the updated budget value from the AWS Systems Manager Parameter Store and updates the AWS Budgets (SpokeAccountBudget) value accordingly
 6. **Email Notifications**: When spending reaches configured thresholds, the system sends notifications to designated stakeholders
 
 ## Prerequisites
