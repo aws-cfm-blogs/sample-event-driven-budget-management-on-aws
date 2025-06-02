@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: AWS Budgets Automation - Master Account Resources
+Description: AWS Budgets Automation - Management Account Resources
 
 Parameters:
   SSMBudgetParameter:
